@@ -12,7 +12,7 @@
 #define DELETED "DELET"
 #define KEYLEN 256
 #define VALLEN 256
-#define OVERHEAD 10
+#define OVERHEAD 7 // len 5 metadata and ":" and "\n"
 #define FILLER "-"
 
 const char * empty = "EMPTY";
@@ -35,6 +35,15 @@ unsigned long hash(char *str) {
 }
 
 
+int string_length(char * str)
+{
+    int i = 0;
+    while(str[i]!= '\0')
+    {
+        i++;
+    }
+    return i;
+}
 
 /*
     insert function with linear probing
@@ -44,37 +53,87 @@ int insert(FILE* file_fd, char * key, char * value)
 {
     int key_len, val_len;
     key_len = val_len = 0;
-    char status[5];
+    char status[6];
+    char key_with_filler[257];
+    char value_with_filler[257];
+    char temp_str[257];
+    if(key == NULL || value == NULL)
+        return 0;
+
+    //calculate length of key
+    key_len = string_length(key);
+
+    //calculate length of value
+    val_len = string_length(value);
+
+    if(key_len > KEYLEN || val_len > VALLEN)
+        return 0;
     
-    while(key[key_len] != '\0')
+    if(key_len<=KEYLEN)
     {
-        key_len++;
+        strcpy(key_with_filler, key);
+        for(int i = key_len; i<256; i++)
+        {
+            key_with_filler[i] = '-';
+        }
+        key_with_filler[256] = '\0'; 
     }
 
-    while(value[val_len]!= '\0')
+    if(val_len<=VALLEN)
     {
-        val_len++;
+        strcpy(value_with_filler, value);
+        for(int i = val_len; i<256; i++)
+        {
+            value_with_filler[i] = '-';
+        }
+        value_with_filler[256] = '\0';
     }
 
     int index = hash(key);
     index %= ENTRIES;
-
-    printf("Index is %d\n", index);
-    printf("%d\n", ENTRYSIZE*index);
-    fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
-    fread(status, 5, 1, file_fd);
-    printf("%s\n", status);
-    if(strcmp(status, empty) == 0)
+    if(index<0)
     {
-        fseek(file_fd, -5, SEEK_CUR);
-        fwrite(filled, 5, 1, file_fd);
-        fseek(file_fd, 3, SEEK_CUR);
-        fwrite(key, key_len, 1, file_fd);
-        fseek(file_fd, 257-key_len, SEEK_CUR);
-        fwrite(value, val_len, 1, file_fd);
+        index += ENTRIES;
     }
 
-    return 1;
+    fseek(file_fd, 0, SEEK_SET);
+    printf("Index is %d\n", index);
+
+    for(int i = 0; i < ENTRIES; i++)
+    {
+        fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
+        fread(status, 5, 1, file_fd);
+        status[5] = '\0';
+        printf("Status is %s\n", status);
+        if(strcmp(status, empty) == 0 || strcmp(status, deleted) == 0)
+        {
+            fseek(file_fd, -5, SEEK_CUR);
+            fwrite(filled, 5, 1, file_fd);
+            fwrite(key_with_filler, 256, 1, file_fd);
+            fseek(file_fd, 1, SEEK_CUR);
+            fwrite(value_with_filler, 256, 1, file_fd);
+            return 1;
+        } else if (strcmp(status, filled) == 0)
+        {
+            fread(temp_str, 256, 1, file_fd);
+            temp_str[256] = '\0';
+            if(strcmp(temp_str, key_with_filler) == 0)
+            {
+                printf("Updated Value\n");
+                fseek(file_fd, 1, SEEK_CUR);
+                fwrite(value_with_filler, 256, 1, file_fd);
+                return 1;
+            }
+        }
+        index++;
+        index %= 256;
+        if(index < 0)
+        {
+            index += 256;
+        }
+    }
+
+    return -1;
 }
 
 /*
@@ -102,7 +161,7 @@ FILE* initialise_kv_store()
         for(int i = 0; i < ENTRIES; i++)
         {
             fwrite(empty, 5, 1, file_fd);
-            fprintf(file_fd, "%3d", 0);
+            //fprintf(file_fd, "%3d", 0);
             for (int j = 0; j < KEYLEN; j++)
             {
                 fwrite(filler, 1 , 1, file_fd);
@@ -125,9 +184,17 @@ int main()
 {
     FILE* file = initialise_kv_store();
     char* key = "Hello";
-    char* val = "World";
-    int i = insert(file, key, val);
-    int j = insert(file, "Abishek", "Raut");
+    char* val = "YOU";
+    if(insert(file, key, val) == 1)
+    {
+        printf("Element Inserted\n");
+    }
+
+    if(insert(file, "Abhishek", "Raut") == 1)
+    {
+        printf("Element Inserted\n");
+    }
+
     fclose(file);
     return 0;
 }
