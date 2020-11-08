@@ -30,7 +30,6 @@ unsigned long hash(char *str) {
 
 	while ((c = *str++))
 		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-	printf("hash=%zu\n", hash);
 	return hash;
 }
 
@@ -136,6 +135,87 @@ int insert(FILE* file_fd, char * key, char * value)
     return -1;
 }
 
+
+/*
+    Delete
+*/
+
+int delete_entry(FILE * file_fd, char *key)
+{
+    if(key == NULL)
+        return -1;
+    
+    int key_len = string_length(key);
+    char key_with_filler[257];
+    char temp_str[257];
+    char status[6];
+
+    if(key_len > KEYLEN)
+        return -1;
+    
+    if(key_len <= KEYLEN)
+    {
+        strcpy(key_with_filler, key);
+        for(int i = key_len; i < KEYLEN; i++)
+        {
+            key_with_filler[i] = '-';
+        }
+        key_with_filler[256] = '\0';
+    }
+
+    int index = hash(key);
+    index %= ENTRIES;
+    if(index<0)
+    {
+        index += ENTRIES;
+    }
+
+    printf("Index: %d\n", index);
+
+    for(int i = 0; i < 256; i++)
+    {
+        fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
+        fread(status, 5, 1, file_fd);
+        status[5] = '\0';
+        printf("Status is %s\n", status);
+        if(strcmp(status, empty)==0)
+        {
+            return -1;
+        }
+        else if (strcmp(status, filled)==0)
+        {
+            fread(temp_str, 256, 1, file_fd);
+            temp_str[256] = '\0';
+            fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
+            if(strcmp(temp_str, key_with_filler) == 0)
+            {
+                printf("Here\n");
+                // fseek(file_fd, -5, SEEK_CUR);
+                fwrite(deleted, 5, 1, file_fd);
+                for (int j = 0; j < KEYLEN; j++)
+                {
+                    fwrite(filler, 1 , 1, file_fd);
+                }
+                fseek(file_fd, 1, SEEK_CUR);
+                for (int j = 0; j < VALLEN; j++)
+                {
+                    fwrite(filler, 1 , 1, file_fd);
+                }
+                return 1;
+            }
+        }
+        index++;
+        index %= 256;
+        if(index < 0)
+        {
+            index += 256;
+        }        
+    }
+}
+
+
+
+
 /*
   initialise the file 
   check if it already exists 
@@ -185,15 +265,22 @@ int main()
     FILE* file = initialise_kv_store();
     char* key = "Hello";
     char* val = "YOU";
-    if(insert(file, key, val) == 1)
-    {
-        printf("Element Inserted\n");
-    }
-
     if(insert(file, "Abhishek", "Raut") == 1)
     {
         printf("Element Inserted\n");
     }
+
+    if(delete_entry(file, "Abhishek") == -1)
+    {
+        printf("Not Deleted\n");
+    } else {
+        printf("Deleted\n");
+    }
+
+    // if(insert(file, "Abhishek", "Raut") == 1)
+    // {
+    //     printf("Element Inserted\n");
+    // }
 
     fclose(file);
     return 0;
