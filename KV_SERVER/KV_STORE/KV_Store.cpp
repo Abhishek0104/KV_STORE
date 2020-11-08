@@ -22,6 +22,7 @@ const char * filler = "-";
 const int ENTRYSIZE = (KEYLEN + VALLEN + OVERHEAD);
 const int ENTRIES = 256;
 const char *kv_store_name = "kv_hash_db.txt";
+char return_str[257];
 
 
 unsigned long hash(char *str) {
@@ -213,7 +214,71 @@ int delete_entry(FILE * file_fd, char *key)
     }
 }
 
+char * search_value(FILE* file_fd, char * key)
+{
+    if(key == NULL)
+        return NULL;
+    
+    int key_len = string_length(key);
+    char key_with_filler[257];
+    char temp_str[257];
+    char status[6];
 
+    if(key_len > KEYLEN)
+        return NULL;
+    
+    if(key_len <= KEYLEN)
+    {
+        strcpy(key_with_filler, key);
+        for(int i = key_len; i < KEYLEN; i++)
+        {
+            key_with_filler[i] = '-';
+        }
+        key_with_filler[256] = '\0';
+    }
+
+    int index = hash(key);
+    index %= ENTRIES;
+    if(index<0)
+    {
+        index += ENTRIES;
+    }
+
+    printf("Index: %d\n", index);
+
+    for(int i = 0; i < 256; i++)
+    {
+        fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
+        fread(status, 5, 1, file_fd);
+        status[5] = '\0';
+        printf("Status is %s\n", status);
+        if(strcmp(status, empty)==0)
+        {
+            return NULL;
+        }
+        else if (strcmp(status, filled)==0)
+        {
+            fread(temp_str, 256, 1, file_fd);
+            temp_str[256] = '\0';
+            // fseek(file_fd, ENTRYSIZE*index, SEEK_SET);
+            if(strcmp(temp_str, key_with_filler) == 0)
+            {
+                printf("Here\n");
+                fseek(file_fd, 1, SEEK_CUR);
+                fread(return_str, 256, 1, file_fd);
+                return_str[256] = '\0';
+                return return_str;
+            }
+        }
+        index++;
+        index %= 256;
+        if(index < 0)
+        {
+            index += 256;
+        }        
+    }
+
+}
 
 
 /*
@@ -270,17 +335,7 @@ int main()
         printf("Element Inserted\n");
     }
 
-    if(delete_entry(file, "Abhishek") == -1)
-    {
-        printf("Not Deleted\n");
-    } else {
-        printf("Deleted\n");
-    }
-
-    // if(insert(file, "Abhishek", "Raut") == 1)
-    // {
-    //     printf("Element Inserted\n");
-    // }
+    printf("Search %s\n", search_value(file, "Abhishek"));
 
     fclose(file);
     return 0;
